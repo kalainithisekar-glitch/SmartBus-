@@ -567,3 +567,41 @@ def get_bus_route(bus_id: int):
         "destination": row[5]
     }
 
+#bus route-> lastest bus location
+
+
+@app.get("/buses/{bus_id}/tracking")
+def get_bus_tracking(bus_id: int):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """ SELECT
+            buses.bus_id,
+            buses.bus_number,
+            buses.route_id,
+            bus_locations.latitude,
+            bus_locations.longitude,
+            bus_locations.timestamp
+        FROM buses
+        LEFT JOIN bus_locations
+            ON buses.bus_id = bus_locations.bus_id
+        WHERE buses.bus_id = %s
+        ORDER BY bus_locations.timestamp DESC LIMIT 1 """,(bus_id,))
+
+    row = cursor.fetchone()
+    cursor.close()
+    connection.close()
+
+    if row is None:
+        return {"message": "Bus not found"}
+
+    return {
+        "bus_id": row[0],
+        "bus_number": row[1],
+        "route_id": row[2],
+        "latitude": float(row[3]) if row[3] is not None else None,
+        "longitude": float(row[4]) if row[4] is not None else None,
+        "timestamp": row[5] }
+
+

@@ -1,3 +1,4 @@
+from fastapi import FastAPI, HTTPException
 from fastapi import FastAPI
 from pydantic import BaseModel
 import psycopg2
@@ -100,6 +101,90 @@ def get_users():
     return users
 
 #drivers
+
+
+
+# POST /drivers - Create Driver
+
+class DriverCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+    role: str = "DRIVER"
+
+
+@app.post("/drivers")
+def create_driver(driver: DriverCreate):
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        # Convert role into uppercase
+        role = driver.role.strip().upper()
+
+        if role != "DRIVER":
+            raise HTTPException(
+                status_code=400,
+                detail="Role must be DRIVER"
+            )
+
+        # Insert driver details into users table
+        cursor.execute(
+            """
+            INSERT INTO users
+            (name, email, phone, password, role)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING user_id
+            """,
+            (
+                driver.name,
+                driver.email,
+                driver.phone,
+                driver.password,
+                role
+            )
+        )
+
+        user_id = cursor.fetchone()[0]
+
+        # Insert user_id into drivers table
+        cursor.execute(
+            """
+            INSERT INTO drivers (user_id)
+            VALUES (%s)
+            RETURNING driver_id
+            """,
+            (user_id,)
+        )
+
+        driver_id = cursor.fetchone()[0]
+
+        connection.commit()
+
+        return {
+            "message": "Driver created successfully!",
+            "driver_id": driver_id,
+            "user_id": user_id,
+            "name": driver.name,
+            "role": role
+        }
+
+    except HTTPException:
+        connection.rollback()
+        raise
+
+    except Exception as e:
+        connection.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+
+    finally:
+        cursor.close()
+        connection.close()
 
 @app.get("/drivers")
 def get_drivers():

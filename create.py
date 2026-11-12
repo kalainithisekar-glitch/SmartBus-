@@ -29,6 +29,9 @@ def create_user(user: User):
     connection = get_connection()
     cursor = connection.cursor()
 
+    # Convert role into uppercase
+    role = user.role.strip().upper()
+
     cursor.execute(
         """
         INSERT INTO users
@@ -41,13 +44,14 @@ def create_user(user: User):
             user.email,
             user.phone,
             user.password,
-            user.role
+            role
         )
     )
 
     user_id = cursor.fetchone()[0]
 
-    if user.role == "DRIVER":
+    # Create driver record if role is DRIVER
+    if role == "DRIVER":
 
         cursor.execute(
             """
@@ -64,7 +68,8 @@ def create_user(user: User):
 
     return {
         "message": "User added successfully!",
-        "user_id": user_id
+        "user_id": user_id,
+        "role": role
     }
 @app.get("/users")
 def get_users():
@@ -135,6 +140,7 @@ def get_drivers():
 class Bus(BaseModel):
     bus_number: str
     driver_id: int
+    route_id: int
 
 #buses
 @app.post("/buses")
@@ -145,13 +151,14 @@ def create_bus(bus: Bus):
 
     cursor.execute(
         """
-        INSERT INTO buses (bus_number, driver_id)
-        VALUES (%s, %s)
+        INSERT INTO buses (bus_number, driver_id, route_id)
+        VALUES (%s, %s, %s)
         RETURNING bus_id
         """,
         (
             bus.bus_number,
-            bus.driver_id
+            bus.driver_id,
+            bus.route_id
         )
     )
 
@@ -166,7 +173,6 @@ def create_bus(bus: Bus):
         "message": "Bus added successfully!",
         "bus_id": bus_id
     }
-
 
 @app.get("/buses")
 def get_buses():
@@ -269,14 +275,11 @@ def create_stop(stop: Stop):
         VALUES (%s, %s, %s, %s, %s)
         RETURNING stop_id
         """,
-        (
-            stop.route_id,
+        (   stop.route_id,
             stop.stop_name,
             stop.latitude,
             stop.longitude,
-            stop.stop_order
-        )
-    )
+            stop.stop_order ) )
 
     stop_id = cursor.fetchone()[0]
 
@@ -545,8 +548,7 @@ def get_bus_route(bus_id: int):
             ON buses.route_id = routes.route_id
         WHERE buses.bus_id = %s
         """,
-        (bus_id,)
-    )
+        (bus_id,))
 
     row = cursor.fetchone()
 

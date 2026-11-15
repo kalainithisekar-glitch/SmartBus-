@@ -1,4 +1,3 @@
-from fastapi import FastAPI, HTTPException
 from fastapi import FastAPI
 from pydantic import BaseModel
 import psycopg2
@@ -30,9 +29,7 @@ def create_user(user: User):
     connection = get_connection()
     cursor = connection.cursor()
 
-    # Convert role into uppercase
-    role = user.role.strip().upper()
-
+    
     cursor.execute(
         """
         INSERT INTO users
@@ -45,23 +42,13 @@ def create_user(user: User):
             user.email,
             user.phone,
             user.password,
-            role
+            user.role
         )
     )
 
     user_id = cursor.fetchone()[0]
 
-    # Create driver record if role is DRIVER
-    if role == "DRIVER":
-
-        cursor.execute(
-            """
-            INSERT INTO drivers (user_id)
-            VALUES (%s)
-            """,
-            (user_id,)
-        )
-
+      
     connection.commit()
 
     cursor.close()
@@ -69,9 +56,9 @@ def create_user(user: User):
 
     return {
         "message": "User added successfully!",
-        "user_id": user_id,
-        "role": role
+        "user_id": user_id
     }
+
 @app.get("/users")
 def get_users():
 
@@ -100,11 +87,9 @@ def get_users():
 
     return users
 
+
 #drivers
 
-
-
-# POST /drivers - Create Driver
 
 class DriverCreate(BaseModel):
     name: str
@@ -121,7 +106,6 @@ def create_driver(driver: DriverCreate):
     cursor = connection.cursor()
 
     try:
-        # Convert role into uppercase
         role = driver.role.strip().upper()
 
         if role != "DRIVER":
@@ -130,7 +114,7 @@ def create_driver(driver: DriverCreate):
                 detail="Role must be DRIVER"
             )
 
-        # Insert driver details into users table
+        # Insert into users table
         cursor.execute(
             """
             INSERT INTO users
@@ -149,7 +133,7 @@ def create_driver(driver: DriverCreate):
 
         user_id = cursor.fetchone()[0]
 
-        # Insert user_id into drivers table
+        # Insert into drivers table
         cursor.execute(
             """
             INSERT INTO drivers (user_id)
@@ -165,26 +149,18 @@ def create_driver(driver: DriverCreate):
 
         return {
             "message": "Driver created successfully!",
-            "driver_id": driver_id,
             "user_id": user_id,
-            "name": driver.name,
-            "role": role
+            "driver_id": driver_id
         }
-
-    except HTTPException:
-        connection.rollback()
-        raise
 
     except Exception as e:
         connection.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
 
     finally:
         cursor.close()
         connection.close()
+
 
 @app.get("/drivers")
 def get_drivers():
@@ -222,42 +198,55 @@ def get_drivers():
 
     return drivers
 
+
+#buses
+
 class Bus(BaseModel):
     bus_number: str
     driver_id: int
     route_id: int
 
-#buses
+
 @app.post("/buses")
 def create_bus(bus: Bus):
 
     connection = get_connection()
     cursor = connection.cursor()
 
-    cursor.execute(
-        """
-        INSERT INTO buses (bus_number, driver_id, route_id)
-        VALUES (%s, %s, %s)
-        RETURNING bus_id
-        """,
-        (
-            bus.bus_number,
-            bus.driver_id,
-            bus.route_id
+    try:
+        cursor.execute(
+            """
+            INSERT INTO buses (bus_number, driver_id, route_id)
+            VALUES (%s, %s, %s)
+            RETURNING bus_id
+            """,
+            (
+                bus.bus_number,
+                bus.driver_id,
+                bus.route_id
+            )
         )
-    )
 
-    bus_id = cursor.fetchone()[0]
+        bus_id = cursor.fetchone()[0]
 
-    connection.commit()
+        connection.commit()
 
-    cursor.close()
-    connection.close()
+        return {
+            "message": "Bus added successfully!",
+            "bus_id": bus_id
+        }
 
-    return {
-        "message": "Bus added successfully!",
-        "bus_id": bus_id
-    }
+    except Exception as e:
+        connection.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+    finally:
+        cursor.close()
+        connection.close()
+
 
 @app.get("/buses")
 def get_buses():
@@ -267,8 +256,7 @@ def get_buses():
 
     cursor.execute(
         """
-        SELECT bus_id, bus_number, driver_id
-        FROM buses
+        SELECT bus_id, bus_number, driver_id,route_id FROM buses
         """
     )
 
@@ -404,8 +392,7 @@ def get_stops():
             "stop_name": row[2],
             "latitude": float(row[3]) if row[3] is not None else None,
             "longitude": float(row[4]) if row[4] is not None else None,
-            "stop_order": row[5]
-        })
+            "stop_order": row[5] })
 
     return stops
 
@@ -474,8 +461,7 @@ def get_bus_locations():
             "bus_id": row[1],
             "latitude": float(row[2]),
             "longitude": float(row[3]),
-            "timestamp": row[4]
-        })
+            "timestamp": row[4] })
 
     return locations
 
